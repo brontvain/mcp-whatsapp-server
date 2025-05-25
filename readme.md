@@ -64,7 +64,7 @@ The web interface provides:
 
 - **Phone Number Configuration**
   - Set the target WhatsApp contact number
-  - Format: country code + number (e.g., 14254572311)
+  - Format: country code + number (e.g., 14251122345)
 
 - **AI Context Editor**
   - Edit the AI assistant's behavior and responses
