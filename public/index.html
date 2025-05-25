@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Server Control Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">WhatsApp Server Control Panel</h1>
+        
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <!-- Settings Form -->
+            <form id="settingsForm" class="space-y-6">
+                <div>
+                    <label for="phoneNumber" class="block text-sm font-medium text-gray-700">Contact Phone Number</label>
+                    <input type="text" id="phoneNumber" name="phoneNumber" 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="Enter phone number (e.g., 14254572311)">
+                    <p class="mt-1 text-sm text-gray-500">Format: country code + number, no spaces or special characters</p>
+                    <button type="submit" 
+                            class="mt-2 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        Save Phone Number
+                    </button>
+                </div>
+            </form>
+
+            <!-- Context Editor Section -->
+            <div class="mt-8">
+                <h2 class="text-xl font-semibold mb-4">AI Assistant Context</h2>
+                <div>
+                    <textarea id="contextContent" name="contextContent" rows="6"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Enter the context for the assistant..."></textarea>
+                    <button type="button" id="saveContextBtn"
+                        class="mt-2 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        Save Context
+                    </button>
+                </div>
+            </div>
+
+            <!-- QR Code Section -->
+            <div id="qrSection" class="mt-8 hidden">
+                <h2 class="text-xl font-semibold mb-4">WhatsApp QR Code</h2>
+                <div id="qrCode" class="flex justify-center"></div>
+                <p class="mt-4 text-sm text-gray-600 text-center">Scan this QR code with your WhatsApp to connect</p>
+            </div>
+
+            <!-- Status Section -->
+            <div id="statusSection" class="mt-8">
+                <h2 class="text-xl font-semibold mb-4">Server Status</h2>
+                <div id="statusMessage" class="p-4 rounded-md bg-gray-100">
+                    Checking server status...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+
+        // Handle phone number form submission
+        document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const phoneNumber = document.getElementById('phoneNumber').value;
+
+            try {
+                const response = await fetch('/update-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        phoneNumber,
+                        contextFile: 'contexts/default.txt' // Keep this fixed
+                    }),
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    alert('Phone number updated successfully!');
+                } else {
+                    alert('Failed to update phone number: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error updating phone number: ' + error.message);
+            }
+        });
+
+        // Handle QR code display
+        socket.on('qr', (qr) => {
+            const qrSection = document.getElementById('qrSection');
+            const qrCode = document.getElementById('qrCode');
+            qrSection.classList.remove('hidden');
+            qrCode.innerHTML = `<img src="${qr}" alt="WhatsApp QR Code">`;
+        });
+
+        // Handle server status updates
+        socket.on('status', (status) => {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = status.message;
+            statusMessage.className = `p-4 rounded-md ${status.connected ? 'bg-green-100' : 'bg-red-100'}`;
+        });
+
+        // Load current settings and context content on page load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/get-settings');
+                const settings = await response.json();
+                document.getElementById('phoneNumber').value = settings.phoneNumber || '';
+                
+                // Load context content
+                const contextRes = await fetch('/contexts/default.txt');
+                if (contextRes.ok) {
+                    const contextText = await contextRes.text();
+                    document.getElementById('contextContent').value = contextText;
+                } else {
+                    document.getElementById('contextContent').value = '';
+                }
+            } catch (error) {
+                console.error('Error loading settings or context:', error);
+            }
+        });
+
+        // Save context content
+        document.getElementById('saveContextBtn').addEventListener('click', async () => {
+            const context = document.getElementById('contextContent').value;
+            try {
+                const response = await fetch('/update-context', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        context,
+                        filename: 'default.txt'
+                    }),
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    alert('Context updated successfully!');
+                } else {
+                    alert('Failed to update context: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error updating context: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html> 
