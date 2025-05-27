@@ -22,6 +22,9 @@ app.use(express.json());
 let CONTACT_PHONE_NUMBER = '14254572311';
 let CONTEXT_FILE = 'contexts/default.txt';
 
+// Store conversation history
+const conversationHistory = new Map();
+
 // Initialize OpenAI client
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
@@ -37,6 +40,22 @@ async function loadContext(contextFile = CONTEXT_FILE) {
         console.error('Error loading context file:', error);
         return 'You are a helpful assistant responding to WhatsApp messages. Keep responses concise and friendly.';
     }
+}
+
+// Function to get conversation history for a number
+function getConversationHistory(number, maxHistory = 10) {
+    if (!conversationHistory.has(number)) {
+        conversationHistory.set(number, []);
+    }
+    return conversationHistory.get(number).slice(-maxHistory);
+}
+
+// Function to add message to conversation history
+function addToConversationHistory(number, role, content) {
+    if (!conversationHistory.has(number)) {
+        conversationHistory.set(number, []);
+    }
+    conversationHistory.get(number).push({ role, content });
 }
 
 // WhatsApp client setup
@@ -70,22 +89,29 @@ client.on('message', async msg => {
             try {
                 const context = await loadContext();
                 
+                // Add user message to conversation history
+                addToConversationHistory(senderNumber, 'user', msg.body);
+                
+                // Prepare messages array with context and conversation history
+                const messages = [
+                    {
+                        role: "system",
+                        content: context
+                    },
+                    ...getConversationHistory(senderNumber)
+                ];
+
                 const completion = await openai.chat.completions.create({
                     model: "gpt-3.5-turbo",
-                    messages: [
-                        {
-                            role: "system",
-                            content: context
-                        },
-                        {
-                            role: "user",
-                            content: msg.body
-                        }
-                    ],
+                    messages: messages,
                     max_tokens: 150
                 });
 
                 const response = completion.choices[0].message.content;
+                
+                // Add AI response to conversation history
+                addToConversationHistory(senderNumber, 'assistant', response);
+                
                 await msg.reply(response);
                 console.log(`Auto-replied to ${senderNumber} with AI-generated response`);
             } catch (error) {
@@ -142,6 +168,18 @@ app.post('/update-context', express.json(), async (req, res) => {
     } catch (error) {
         console.error('Error updating context:', error);
         res.status(500).json({ error: 'Failed to update context' });
+    }
+});
+
+// Clear conversation history endpoint
+app.post('/clear-history', express.json(), (req, res) => {
+    const { phoneNumber } = req.body;
+    if (phoneNumber) {
+        conversationHistory.delete(phoneNumber);
+        res.json({ status: 'success', message: 'Conversation history cleared' });
+    } else {
+        conversationHistory.clear();
+        res.json({ status: 'success', message: 'All conversation histories cleared' });
     }
 });
 

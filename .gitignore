@@ -1,5 +1,6 @@
-# Environment variables
+# Environment variables & other
 .env
+contexts/default.txt
 
 # Node modules
 node_modules/
