@@ -98,17 +98,57 @@
 
         // Handle QR code display
         socket.on('qr', (qr) => {
+            console.log('Received QR code data:', qr.substring(0, 100) + '...');
             const qrSection = document.getElementById('qrSection');
             const qrCode = document.getElementById('qrCode');
             qrSection.classList.remove('hidden');
-            qrCode.innerHTML = `<img src="${qr}" alt="WhatsApp QR Code">`;
+            
+            // Clear previous QR code
+            qrCode.innerHTML = '';
+            
+            // Create and display the QR code image
+            const img = document.createElement('img');
+            img.src = qr;
+            img.alt = 'WhatsApp QR Code';
+            img.style.maxWidth = '300px';
+            img.style.height = 'auto';
+            
+            // Add error handling for the image
+            img.onerror = function() {
+                console.error('Failed to load QR code image');
+                qrCode.innerHTML = '<p class="text-red-500">Failed to load QR code. Please refresh the page.</p>';
+            };
+            
+            img.onload = function() {
+                console.log('QR code image loaded successfully');
+            };
+            
+            qrCode.appendChild(img);
         });
 
         // Handle server status updates
         socket.on('status', (status) => {
+            console.log('Received status update:', status);
             const statusMessage = document.getElementById('statusMessage');
             statusMessage.textContent = status.message;
             statusMessage.className = `p-4 rounded-md ${status.connected ? 'bg-green-100' : 'bg-red-100'}`;
+            
+            // Hide QR section if connected
+            if (status.connected) {
+                document.getElementById('qrSection').classList.add('hidden');
+            }
+        });
+
+        // Add connection status handling
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            document.getElementById('statusMessage').textContent = 'Connected to server. Waiting for WhatsApp status...';
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            document.getElementById('statusMessage').textContent = 'Disconnected from server. Please refresh the page.';
+            document.getElementById('statusMessage').className = 'p-4 rounded-md bg-red-100';
         });
 
         // Load current settings and context content on page load

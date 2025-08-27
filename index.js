@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const qrcodeWeb = require('qrcode');
 const OpenAI = require('openai');
 const fs = require('fs').promises;
 const path = require('path');
@@ -63,12 +64,19 @@ const client = new Client({
     authStrategy: new LocalAuth()
 });
 
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
     console.log('Scan this QR code with your WhatsApp:');
     qrcode.generate(qr, { small: true });
     
-    // Emit QR code to connected clients
-    io.emit('qr', `data:image/png;base64,${qr}`);
+    try {
+        // Generate QR code as base64 data URL for web display
+        const qrDataUrl = await qrcodeWeb.toDataURL(qr);
+        io.emit('qr', qrDataUrl);
+    } catch (error) {
+        console.error('Error generating QR code for web:', error);
+        // Fallback: emit the raw QR data
+        io.emit('qr', `data:image/png;base64,${qr}`);
+    }
 });
 
 client.on('ready', () => {
@@ -79,6 +87,16 @@ client.on('ready', () => {
 client.on('disconnected', () => {
     console.log('WhatsApp client disconnected');
     io.emit('status', { connected: false, message: 'WhatsApp client disconnected. Please scan QR code to reconnect.' });
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('WhatsApp authentication failed:', msg);
+    io.emit('status', { connected: false, message: 'WhatsApp authentication failed. Please try again.' });
+});
+
+client.on('loading_screen', (percent, message) => {
+    console.log('WhatsApp loading:', percent + '%', message);
+    io.emit('status', { connected: false, message: `WhatsApp loading: ${percent}% - ${message}` });
 });
 
 client.on('message', async msg => {
@@ -124,6 +142,9 @@ client.on('message', async msg => {
 
 // Start WhatsApp client
 client.initialize();
+
+// Emit initial status
+io.emit('status', { connected: false, message: 'WhatsApp client is initializing...' });
 
 // API Endpoints
 app.get('/get-settings', (req, res) => {
